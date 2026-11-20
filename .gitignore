@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# Java / Maven
+target/
+*.class
+*.log
+HELP.md
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Secrets and local config (commit .env.example instead)
+.env
+.env.*
+!.env.example
