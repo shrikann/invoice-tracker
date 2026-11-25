@@ -1,6 +1,7 @@
 package com.shri.invoicetracker.common;
 
 import com.shri.invoicetracker.auth.EmailAlreadyRegisteredException;
+import com.shri.invoicetracker.auth.TooManyLoginAttemptsException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -43,6 +44,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ProblemDetail> handleBadCredentials(BadCredentialsException ex) {
         return problem(HttpStatus.UNAUTHORIZED, "Authentication failed", ex.getMessage());
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyLoginAttemptsException ex) {
+        return problem(HttpStatus.TOO_MANY_REQUESTS, "Too many login attempts", ex.getMessage());
     }
 
     private ResponseEntity<ProblemDetail> problem(HttpStatus status, String title, String detail) {

@@ -23,6 +23,7 @@ public class AuthService {
     private final BusinessRepository businessRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LoginAttemptService loginAttemptService;
 
     // Checked against when the email is unknown, so unknown and known emails take similar time.
     private final String dummyHash;
@@ -30,11 +31,13 @@ public class AuthService {
     public AuthService(UserRepository userRepository,
                        BusinessRepository businessRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       LoginAttemptService loginAttemptService) {
         this.userRepository = userRepository;
         this.businessRepository = businessRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.loginAttemptService = loginAttemptService;
         this.dummyHash = passwordEncoder.encode("not-a-real-password");
     }
 
@@ -62,15 +65,23 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        Optional<AppUser> user = userRepository.findByEmail(normalizeEmail(request.email()));
+        String email = normalizeEmail(request.email());
+
+        if (loginAttemptService.isBlocked(email)) {
+            throw new TooManyLoginAttemptsException();
+        }
+
+        Optional<AppUser> user = userRepository.findByEmail(email);
 
         String hashToCheck = user.map(AppUser::getPasswordHash).orElse(dummyHash);
         boolean passwordMatches = passwordEncoder.matches(request.password(), hashToCheck);
 
         if (user.isEmpty() || !passwordMatches || !user.get().isEnabled()) {
+            loginAttemptService.recordFailure(email);
             throw new BadCredentialsException("Invalid email or password");
         }
 
+        loginAttemptService.reset(email);
         return new AuthResponse(jwtService.generateToken(user.get().getId()), TOKEN_TYPE);
     }
 

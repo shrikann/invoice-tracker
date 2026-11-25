@@ -35,8 +35,9 @@ class AuthServiceTest {
     private final BusinessRepository businessRepository = mock(BusinessRepository.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final JwtService jwtService = new JwtService(SECRET, 30);
-    private final AuthService authService =
-            new AuthService(userRepository, businessRepository, passwordEncoder, jwtService);
+    private final LoginAttemptService loginAttemptService = new LoginAttemptService();
+    private final AuthService authService = new AuthService(
+            userRepository, businessRepository, passwordEncoder, jwtService, loginAttemptService);
 
     private AppUser storedUser(boolean enabled) {
         AppUser user = new AppUser();
@@ -46,6 +47,11 @@ class AuthServiceTest {
         user.setRole(Role.OWNER);
         user.setEnabled(enabled);
         return user;
+    }
+
+    private void failLogin() {
+        assertThatThrownBy(() -> authService.login(new LoginRequest("owner@example.com", "wrong-password")))
+                .isInstanceOf(BadCredentialsException.class);
     }
 
     @Test
@@ -110,8 +116,7 @@ class AuthServiceTest {
     void loginWithWrongPasswordIsRejected() {
         when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(storedUser(true)));
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("owner@example.com", "wrong-password")))
-                .isInstanceOf(BadCredentialsException.class);
+        failLogin();
     }
 
     @Test
@@ -120,5 +125,31 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("owner@example.com", "password123")))
                 .isInstanceOf(BadCredentialsException.class);
+    }
+
+    @Test
+    void loginIsBlockedAfterFiveFailuresEvenWithTheCorrectPassword() {
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(storedUser(true)));
+
+        for (int i = 0; i < 5; i++) {
+            failLogin();
+        }
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("owner@example.com", "password123")))
+                .isInstanceOf(TooManyLoginAttemptsException.class);
+    }
+
+    @Test
+    void aSuccessfulLoginResetsTheFailureCount() {
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(storedUser(true)));
+
+        for (int i = 0; i < 4; i++) {
+            failLogin();
+        }
+        authService.login(new LoginRequest("owner@example.com", "password123"));
+
+        for (int i = 0; i < 4; i++) {
+            failLogin();
+        }
     }
 }
